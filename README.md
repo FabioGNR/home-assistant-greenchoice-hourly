@@ -36,3 +36,8 @@ By default the integration attempts to import the last 3 weeks when first added.
 # Thanks to
 
 Integration [homeassistant-greenchoice](https://github.com/barisdemirdelen/homeassistant-greenchoice) for inspiration and authentication code.
+
+[releases-shield]: https://img.shields.io/github/release/FabioGNR/home-assistant-greenchoice-hourly.svg
+[releases-link]: https://github.com/FabioGNR/home-assistant-greenchoice-hourly/releases
+[license-shield]: https://img.shields.io/github/license/FabioGNR/home-assistant-greenchoice-hourly?color=brightgreen
+[license-link]: https://github.com/FabioGNR/home-assistant-greenchoice-hourly/blob/master/LICENSE
