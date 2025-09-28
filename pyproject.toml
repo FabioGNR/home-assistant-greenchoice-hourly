@@ -1,6 +1,6 @@
 [project]
 name = "home-assistant-greenchoice"
-version = "1.0.0"
+version = "0.0.1"
 description = "Integration to connect Greenchoice hourly data with HASS"
 authors = [""]
 readme = "README.md"
