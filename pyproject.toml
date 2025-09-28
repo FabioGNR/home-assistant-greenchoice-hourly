@@ -1,0 +1,26 @@
+[project]
+name = "home-assistant-greenchoice"
+version = "1.0.0"
+description = "Integration to connect Greenchoice hourly data with HASS"
+authors = [""]
+readme = "README.md"
+requires-python = ">=3.13.2"
+dependencies = [
+    "aiohttp>=3.12.15",
+    "beautifulsoup4>=4.13.5",
+    "homeassistant>=2025.1",
+    "pydantic>=2.11.1",
+]
+
+[dependency-groups]
+dev = [
+    "coverage>=7.6.10",
+    "pytest-cov>=6.0.0",
+    "pytest>=8.3.4",
+    "mypy>=1.14.1",
+    "ruff>=0.9.4",
+    "pytest-mock>=3.14.0",
+    "types-requests>=2.31.0.6",
+    "requests-mock>=1.12.1",
+    "ty>=0.0.0a8",
+]

@@ -1,0 +1,2 @@
+class GreenchoiceError(Exception):
+    pass
