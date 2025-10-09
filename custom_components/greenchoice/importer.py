@@ -218,7 +218,7 @@ class GreenchoiceImporter:
         max_days = 21  # start with last 3 weeks
         if first_stat is not None:
             days_since = (today - first_stat.date()).days
-            max_days = max(max_days, days_since)
+            max_days = min(max_days, days_since)
         days = [today - timedelta(days=n) for n in range(max_days, 0, -1)]
 
         LOGGER.debug("Importing data for days: %s", days)
