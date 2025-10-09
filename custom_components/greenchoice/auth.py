@@ -43,7 +43,7 @@ def _get_oidc_params(html_txt: str) -> dict[str, str]:
 
 
 async def _login(session: aiohttp.ClientSession, username: str, password: str):
-    _logger.info("Retrieving login cookies")
+    _logger.debug("Retrieving login cookies")
 
     # Get the antiforgery token
     antiforgery_token = await _get_antiforgery_token(session)

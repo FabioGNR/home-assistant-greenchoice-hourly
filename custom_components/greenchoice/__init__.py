@@ -27,6 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _import_values(_: datetime | None = None) -> None:
         """Import values."""
         try:
+            LOGGER.debug("Starting scheduled import of statistics...")
             async with api:
                 await api.login()
                 await importer.import_data()

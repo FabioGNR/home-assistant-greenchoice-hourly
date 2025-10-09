@@ -1,28 +1,30 @@
-from datetime import date, datetime, timedelta, UTC
-from typing import Literal, cast
-from .model import ConsumptionData
-from .api import GreenchoiceApi
 import abc
+import logging
+from datetime import UTC, date, datetime, timedelta
+from typing import Literal, cast
 
-from homeassistant.core import HomeAssistant
 from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.models import (
+    StatisticData,
+    StatisticMeanType,
+    StatisticMetaData,
+)
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
     get_last_statistics,
-    statistics_during_period,
-)
-from homeassistant.components.recorder.models import (
-    StatisticData,
-    StatisticMetaData,
-    StatisticMeanType,
 )
 from homeassistant.const import (
     CURRENCY_EURO,
     UnitOfEnergy,
     UnitOfVolume,
 )
+from homeassistant.core import HomeAssistant
+
+from .api import GreenchoiceApi
+from .model import ConsumptionData
 
 DOMAIN = "greenchoice"
+LOGGER = logging.getLogger(__name__)
 
 
 ConsumptionType = Literal["high"] | Literal["low"] | Literal["total"]
@@ -174,44 +176,39 @@ class GreenchoiceImporter:
             sum += value
             statistics.append(StatisticData(start=time, state=value, sum=sum))
 
-        async_add_external_statistics(self._hass, metadata, statistics)
+        if any(statistics):
+            LOGGER.debug("Adding %d statistics for %s", len(statistics), stat.name)
+            async_add_external_statistics(self._hass, metadata, statistics)
+        else:
+            LOGGER.debug("No new statistics for %s", stat.name)
 
     async def get_last_stats(self):
         statistics: dict[StatisticImport, LastStat] = {}
         oldest_stat: datetime | None = None
         for stat in STATS:
-            last_stats = await get_instance(self._hass).async_add_executor_job(
-                get_last_statistics,
-                self._hass,
-                1,
-                stat.statistic_id,
-                True,
-                {"sum"},
-            )
+            last_stats = (
+                await get_instance(self._hass).async_add_executor_job(
+                    get_last_statistics,
+                    self._hass,
+                    1,
+                    stat.statistic_id,
+                    True,
+                    {"sum"},
+                )
+            ).get(stat.statistic_id, [])
+            last_stat = last_stats[0] if last_stats else None
 
-            if not last_stats:
+            if not last_stat or "start" not in last_stat or "sum" not in last_stat:
                 last_stats_time = None
                 _sum = 0.0
             else:
-                last_stats_time = datetime.fromtimestamp(
-                    last_stats[stat.statistic_id][0]["start"], UTC
-                )
-                curr_stat = await get_instance(self._hass).async_add_executor_job(
-                    statistics_during_period,
-                    self._hass,
-                    last_stats_time - timedelta(minutes=30),
-                    None,
-                    {stat.statistic_id},
-                    "hour",
-                    None,
-                    {"sum"},
-                )
-                first_stat = curr_stat[stat.statistic_id][0]
-                _sum = cast(float, first_stat["sum"])
-                last_stats_time = datetime.fromtimestamp(first_stat["start"], UTC)
+                last_stats_time = datetime.fromtimestamp(last_stat["start"], UTC)
+                _sum = cast(float, last_stat["sum"])
                 if oldest_stat is None or last_stats_time < oldest_stat:
                     oldest_stat = last_stats_time
             statistics[stat] = LastStat(last_stats_time, _sum)
+        LOGGER.debug("Oldest statistic is: %s", oldest_stat)
+
         return statistics, oldest_stat
 
     async def import_data(self):
@@ -223,6 +220,8 @@ class GreenchoiceImporter:
             days_since = (today - first_stat.date()).days
             max_days = max(max_days, days_since)
         days = [today - timedelta(days=n) for n in range(max_days, 0, -1)]
+
+        LOGGER.debug("Importing data for days: %s", days)
 
         combined_product_consumption: dict[str, dict[datetime, ConsumptionData]] = {}
         for day in days:
