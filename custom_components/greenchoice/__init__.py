@@ -45,8 +45,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         _import_values,
         timedelta(hours=12),
+        cancel_on_shutdown=True,
     )
 
     entry.async_on_unload(cancel_scheduled_import)
 
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
