@@ -19,6 +19,7 @@ from homeassistant.const import (
     UnitOfVolume,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.util.unit_conversion import EnergyConverter, VolumeConverter
 
 from .api import GreenchoiceApi
 from .model import ConsumptionData
@@ -36,11 +37,13 @@ class StatisticImport(abc.ABC):
         unique_id: str,
         name: str,
         product_type: str,
+        unit_class: str | None,
         unit: UnitOfEnergy | UnitOfVolume | Literal["€"],
     ):
         self.unique_id = unique_id
         self.name = name
         self.product_type = product_type
+        self.unit_class = unit_class
         self.unit = unit
 
     @abc.abstractmethod
@@ -58,10 +61,11 @@ class ConsumptionImport(StatisticImport):
         unique_id: str,
         name: str,
         product_type: str,
+        unit_class: str | None,
         unit: UnitOfEnergy | UnitOfVolume,
         consumption_type: ConsumptionType,
     ):
-        super().__init__(unique_id, name, product_type, unit)
+        super().__init__(unique_id, name, product_type, unit_class, unit)
         self.consumption_type = consumption_type
 
     def get_value(self, data: ConsumptionData):
@@ -72,6 +76,42 @@ class ConsumptionImport(StatisticImport):
         return data.consumption_total
 
 
+class PowerConsumptionImport(ConsumptionImport):
+    def __init__(
+        self,
+        unique_id: str,
+        name: str,
+        product_type: str,
+        consumption_type: ConsumptionType,
+    ):
+        super().__init__(
+            unique_id,
+            name,
+            product_type,
+            EnergyConverter.UNIT_CLASS,
+            UnitOfEnergy.KILO_WATT_HOUR,
+            consumption_type,
+        )
+
+
+class GasConsumptionImport(ConsumptionImport):
+    def __init__(
+        self,
+        unique_id: str,
+        name: str,
+        product_type: str,
+        consumption_type: ConsumptionType,
+    ):
+        super().__init__(
+            unique_id,
+            name,
+            product_type,
+            VolumeConverter.UNIT_CLASS,
+            UnitOfVolume.CUBIC_METERS,
+            consumption_type,
+        )
+
+
 class CostImport(StatisticImport):
     def __init__(
         self,
@@ -80,7 +120,7 @@ class CostImport(StatisticImport):
         product_type: str,
         consumption_type: ConsumptionType,
     ):
-        super().__init__(unique_id, name, product_type, CURRENCY_EURO)
+        super().__init__(unique_id, name, product_type, None, CURRENCY_EURO)
         self.consumption_type = consumption_type
 
     def get_value(self, data: ConsumptionData):
@@ -92,46 +132,40 @@ class CostImport(StatisticImport):
 
 
 STATS: list[StatisticImport] = [
-    ConsumptionImport(
+    PowerConsumptionImport(
         "electricity_consumption_low",
         "Electricity Consumption Low",
         "electricity",
-        UnitOfEnergy.KILO_WATT_HOUR,
         "low",
     ),
-    ConsumptionImport(
+    PowerConsumptionImport(
         "electricity_consumption_high",
         "Electricity Consumption High",
         "electricity",
-        UnitOfEnergy.KILO_WATT_HOUR,
         "high",
     ),
-    ConsumptionImport(
+    PowerConsumptionImport(
         "electricity_consumption_total",
         "Electricity Consumption Total",
         "electricity",
-        UnitOfEnergy.KILO_WATT_HOUR,
         "total",
     ),
-    ConsumptionImport(
+    GasConsumptionImport(
         "gas_consumption_low",
         "Gas Consumption Low",
         "gas",
-        UnitOfVolume.CUBIC_METERS,
         "low",
     ),
-    ConsumptionImport(
+    GasConsumptionImport(
         "gas_consumption_high",
         "Gas Consumption High",
         "gas",
-        UnitOfVolume.CUBIC_METERS,
         "high",
     ),
-    ConsumptionImport(
+    GasConsumptionImport(
         "gas_consumption_total",
         "Gas Consumption Total",
         "gas",
-        UnitOfVolume.CUBIC_METERS,
         "total",
     ),
     CostImport(
@@ -164,6 +198,7 @@ class GreenchoiceImporter:
             name=f"Greenchoice {stat.name}",
             source=DOMAIN,
             statistic_id=stat.statistic_id,
+            unit_class=stat.unit_class,
             unit_of_measurement=stat.unit,
         )
         statistics: list[StatisticData] = []
