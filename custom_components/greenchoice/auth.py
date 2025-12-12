@@ -31,12 +31,12 @@ def _get_oidc_params(html_txt: str) -> dict[str, str]:
     state_elem = soup.find("input", {"name": "state"})
     session_state_elem = soup.find("input", {"name": "session_state"})
 
-    if not (code_elem and scope_elem and state_elem and session_state_elem):
+    if not (code_elem and state_elem and session_state_elem):
         raise LoginError("Login failed, check your credentials?")
 
     return {
         "code": code_elem.attrs.get("value"),
-        "scope": scope_elem.attrs.get("value").replace(" ", "+"),
+        "scope": scope_elem.attrs.get("value").replace(" ", "+") if scope_elem else "",
         "state": state_elem.attrs.get("value"),
         "session_state": session_state_elem.attrs.get("value"),
     }
