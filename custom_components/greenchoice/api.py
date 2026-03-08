@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from .const import BASE_URL
 from .error import GreenchoiceError
 from .auth import setup_auth
-from .model import Consumption
+from .model import Consumption, Profile, ProfileId
 
 
 class GreenchoiceApi:
@@ -31,14 +31,31 @@ class GreenchoiceApi:
         self._session = None
 
     async def login(self):
+        if self._session is None:
+            raise RuntimeError("API must be used from `with` statement")
         await setup_auth(self._session, self._username, self._password)
 
-    async def get_hourly_readings(self, day: date) -> Consumption:
+    async def get_profiles(self) -> list[Profile]:
+        if self._session is None:
+            raise RuntimeError("API must be used from `with` statement")
+        try:
+            profile_response = await self._session.get(f"{BASE_URL}/api/v2/profiles")
+            profile_response.raise_for_status()
+            profiles_body = await profile_response.json()
+            return [Profile.model_validate(p) for p in profiles_body]
+        except aiohttp.ClientError as ex:
+            raise GreenchoiceError from ex
+        except ValidationError as ex:
+            raise GreenchoiceError from ex
+
+    async def get_hourly_readings(self, profile: ProfileId, day: date) -> Consumption:
+        if self._session is None:
+            raise RuntimeError("API must be used from `with` statement")
         try:
             start = day
             end = day + timedelta(days=1)
             consumption_response = await self._session.get(
-                f"{BASE_URL}/api/consumption",
+                f"{BASE_URL}/api/v2/customers/{profile.customer_number}/agreements/{profile.agreement_id}/consumptions",
                 params={"interval": "hour", "start": str(start), "end": str(end)},
             )
 

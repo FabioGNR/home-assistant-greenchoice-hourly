@@ -1,4 +1,5 @@
 import abc
+from enum import Enum
 import logging
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal, cast
@@ -22,13 +23,18 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util.unit_conversion import EnergyConverter, VolumeConverter
 
 from .api import GreenchoiceApi
-from .model import ConsumptionData
+from .model import ConsumptionCost, ProfileId
 
 DOMAIN = "greenchoice"
 LOGGER = logging.getLogger(__name__)
 
 
-ConsumptionType = Literal["high"] | Literal["low"] | Literal["total"]
+ConsumptionType = Literal["normal"] | Literal["low"] | Literal["total"]
+
+
+class ProductType(str, Enum):
+    electricity = "electricity"
+    gas = "gas"
 
 
 class StatisticImport(abc.ABC):
@@ -47,7 +53,7 @@ class StatisticImport(abc.ABC):
         self.unit = unit
 
     @abc.abstractmethod
-    def get_value(self, data: ConsumptionData) -> float:
+    def get_value(self, data: ConsumptionCost) -> float | None:
         pass
 
     @property
@@ -68,13 +74,6 @@ class ConsumptionImport(StatisticImport):
         super().__init__(unique_id, name, product_type, unit_class, unit)
         self.consumption_type = consumption_type
 
-    def get_value(self, data: ConsumptionData):
-        if self.consumption_type == "low":
-            return data.consumption_low
-        if self.consumption_type == "high":
-            return data.consumption_high
-        return data.consumption_total
-
 
 class PowerConsumptionImport(ConsumptionImport):
     def __init__(
@@ -93,14 +92,22 @@ class PowerConsumptionImport(ConsumptionImport):
             consumption_type,
         )
 
+    def get_value(self, data: ConsumptionCost) -> float | None:
+        if data.electricity is None or not data.electricity.has_consumption:
+            return None
+        if self.consumption_type == "low":
+            return data.electricity.delivery_low_consumption
+        elif self.consumption_type == "normal":
+            return data.electricity.delivery_normal_consumption
+        return data.electricity.total_delivery_consumption
 
-class GasConsumptionImport(ConsumptionImport):
+
+class GasConsumptionImport(StatisticImport):
     def __init__(
         self,
         unique_id: str,
         name: str,
-        product_type: str,
-        consumption_type: ConsumptionType,
+        product_type: ProductType,
     ):
         super().__init__(
             unique_id,
@@ -108,8 +115,12 @@ class GasConsumptionImport(ConsumptionImport):
             product_type,
             VolumeConverter.UNIT_CLASS,
             UnitOfVolume.CUBIC_METERS,
-            consumption_type,
         )
+
+    def get_value(self, data: ConsumptionCost) -> float | None:
+        if data.gas is None or not data.gas.has_consumption:
+            return None
+        return data.gas.delivery_consumption
 
 
 class CostImport(StatisticImport):
@@ -123,55 +134,49 @@ class CostImport(StatisticImport):
         super().__init__(unique_id, name, product_type, None, CURRENCY_EURO)
         self.consumption_type = consumption_type
 
-    def get_value(self, data: ConsumptionData):
-        if self.consumption_type == "low":
-            return data.costs_consumption_low
-        if self.consumption_type == "high":
-            return data.costs_consumption_high
-        return data.costs_total_consumption
+    def get_value(self, data: ConsumptionCost) -> float | None:
+        if self.product_type == ProductType.electricity:
+            if self.consumption_type == "low":
+                return data.electricity and data.electricity.delivery_low_costs
+            if self.consumption_type == "normal":
+                return data.electricity and data.electricity.delivery_normal_costs
+            return data.electricity and data.electricity.total_delivery_costs
+        elif self.product_type == ProductType.gas:
+            return data.gas and data.gas.delivery_consumption
+        raise NotImplementedError()
 
 
 STATS: list[StatisticImport] = [
     PowerConsumptionImport(
         "electricity_consumption_low",
         "Electricity Consumption Low",
-        "electricity",
+        ProductType.electricity,
         "low",
     ),
     PowerConsumptionImport(
         "electricity_consumption_high",
-        "Electricity Consumption High",
-        "electricity",
-        "high",
+        "Electricity Consumption Normal",
+        ProductType.electricity,
+        "normal",
     ),
     PowerConsumptionImport(
         "electricity_consumption_total",
         "Electricity Consumption Total",
-        "electricity",
+        ProductType.electricity,
         "total",
-    ),
-    GasConsumptionImport(
-        "gas_consumption_low",
-        "Gas Consumption Low",
-        "gas",
-        "low",
-    ),
-    GasConsumptionImport(
-        "gas_consumption_high",
-        "Gas Consumption High",
-        "gas",
-        "high",
     ),
     GasConsumptionImport(
         "gas_consumption_total",
-        "Gas Consumption Total",
-        "gas",
-        "total",
+        "Gas Consumption",
+        ProductType.gas,
     ),
     CostImport(
-        "electricity_cost_total", "Electricity Cost Total", "electricity", "total"
+        "electricity_cost_total",
+        "Electricity Cost Total",
+        ProductType.electricity,
+        "total",
     ),
-    CostImport("gas_cost_total", "Gas Cost Total", "gas", "total"),
+    CostImport("gas_cost_total", "Gas Cost Total", ProductType.gas, "total"),
 ]
 
 
@@ -182,14 +187,15 @@ class LastStat:
 
 
 class GreenchoiceImporter:
-    def __init__(self, hass: HomeAssistant, api: GreenchoiceApi):
+    def __init__(self, hass: HomeAssistant, api: GreenchoiceApi, profile: ProfileId):
         self._api = api
         self._hass = hass
+        self._profile = profile
 
     def import_stat_values(
         self,
         stat: StatisticImport,
-        data: dict[datetime, ConsumptionData],
+        data: list[ConsumptionCost],
         last_stat: LastStat,
     ):
         metadata = StatisticMetaData(
@@ -204,12 +210,18 @@ class GreenchoiceImporter:
         statistics: list[StatisticData] = []
 
         sum = last_stat.sum
-        for time, current_data in data.items():
-            if last_stat.last_stat is not None and time <= last_stat.last_stat:
+        for current_data in data:
+            if (
+                last_stat.last_stat is not None
+                and current_data.consumed_on <= last_stat.last_stat
+            ):
                 continue
             value = stat.get_value(current_data)
-            sum += value
-            statistics.append(StatisticData(start=time, state=value, sum=sum))
+            if value:
+                sum += value
+                statistics.append(
+                    StatisticData(start=current_data.consumed_on, state=value, sum=sum)
+                )
 
         if any(statistics):
             LOGGER.debug("Adding %d statistics for %s", len(statistics), stat.name)
@@ -258,22 +270,20 @@ class GreenchoiceImporter:
 
         LOGGER.debug("Importing data for days: %s", days)
 
-        combined_product_consumption: dict[str, dict[datetime, ConsumptionData]] = {}
+        all_consumption: list[ConsumptionCost] = []
         for day in days:
-            consumption = await self._api.get_hourly_readings(day)
-            for entry in consumption.entries:
-                product_data = combined_product_consumption.setdefault(
-                    entry.product_type, {}
-                )
-                product_data.update(entry.values)
+            consumption = await self._api.get_hourly_readings(self._profile, day)
+            if consumption.has_consumption:
+                for entry in consumption.consumption_costs:
+                    if entry.has_consumption:
+                        all_consumption.append(entry)
 
         for stat in STATS:
-            if stat.product_type in combined_product_consumption:
-                self.import_stat_values(
-                    stat,
-                    combined_product_consumption[stat.product_type],
-                    last_stats[stat],
-                )
+            self.import_stat_values(
+                stat,
+                all_consumption,
+                last_stats[stat],
+            )
 
     async def clear_data(self):
         ids = [stat.statistic_id for stat in STATS]
