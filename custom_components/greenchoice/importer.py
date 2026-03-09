@@ -22,8 +22,8 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.util.unit_conversion import EnergyConverter, VolumeConverter
 
-from .api import GreenchoiceApi
-from .model import ConsumptionCost, ProfileId
+from .api import GreenchoiceApi, ProfileId
+from .model import ConsumptionCost
 
 DOMAIN = "greenchoice"
 LOGGER = logging.getLogger(__name__)

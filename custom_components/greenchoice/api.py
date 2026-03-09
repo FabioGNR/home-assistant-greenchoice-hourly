@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date, timedelta
 from types import TracebackType
 
@@ -7,7 +8,19 @@ from pydantic import ValidationError
 from .const import BASE_URL
 from .error import GreenchoiceError
 from .auth import setup_auth
-from .model import Consumption, Profile, ProfileId
+from .model import Consumption, Profile
+
+
+@dataclass
+class ProfileId:
+    customer_number: int
+    agreement_id: int
+
+    @staticmethod
+    def from_profile(profile: Profile):
+        return ProfileId(
+            customer_number=profile.customer_number, agreement_id=profile.agreement_id
+        )
 
 
 class GreenchoiceApi:

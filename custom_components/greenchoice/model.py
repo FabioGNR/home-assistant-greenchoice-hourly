@@ -8,12 +8,9 @@ class CamelCaseModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel)
 
 
-class ProfileId(CamelCaseModel):
+class Profile(CamelCaseModel):
     customer_number: int
     agreement_id: int
-
-
-class Profile(ProfileId):
     street: str
     house_number: int
     energy_supply_status: str

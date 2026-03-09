@@ -1,5 +1,5 @@
 import asyncio
-from custom_components.greenchoice.api import GreenchoiceApi
+from custom_components.greenchoice.api import GreenchoiceApi, ProfileId
 import os
 import logging
 from datetime import date, timedelta
@@ -24,7 +24,7 @@ async def main():
         selected_profile = profiles[int(selected_profile_id) - 1]
 
         consumption = await api.get_hourly_readings(
-            selected_profile, date.today() - timedelta(days=3)
+            ProfileId.from_profile(selected_profile), date.today() - timedelta(days=3)
         )
         print(selected_profile.street, consumption)
 

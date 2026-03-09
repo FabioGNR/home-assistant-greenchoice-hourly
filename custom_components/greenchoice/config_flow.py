@@ -51,9 +51,6 @@ class GreenchoiceConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 return await self.async_step_profile(user_input)
-                return await self._create_config_entry(
-                    username=self._username, password=self._password
-                )
 
         return self.async_show_form(
             step_id="user",

@@ -9,10 +9,9 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 
-from .api import GreenchoiceApi
+from .api import GreenchoiceApi, ProfileId
 from .const import CONF_AGREEMENT_ID, CONF_CUSTOMER_NUMBER, LOGGER
 from .importer import GreenchoiceImporter
-from .model import ProfileId
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
