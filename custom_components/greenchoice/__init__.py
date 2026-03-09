@@ -25,7 +25,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         customer_number=entry.data[CONF_CUSTOMER_NUMBER],
         agreement_id=entry.data[CONF_AGREEMENT_ID],
     )
-    importer = GreenchoiceImporter(hass=hass, api=api, profile=profile)
+    importer = GreenchoiceImporter(
+        hass=hass, api=api, name=entry.title, profile=profile
+    )
 
     async def _import_values(_: datetime | None = None) -> None:
         """Import values."""

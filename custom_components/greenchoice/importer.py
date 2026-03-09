@@ -1,7 +1,7 @@
 import abc
+from datetime import UTC, date, datetime, timedelta
 from enum import Enum
 import logging
-from datetime import UTC, date, datetime, timedelta
 from typing import Literal, cast
 
 from homeassistant.components.recorder import get_instance
@@ -14,11 +14,7 @@ from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
     get_last_statistics,
 )
-from homeassistant.const import (
-    CURRENCY_EURO,
-    UnitOfEnergy,
-    UnitOfVolume,
-)
+from homeassistant.const import CURRENCY_EURO, UnitOfEnergy, UnitOfVolume
 from homeassistant.core import HomeAssistant
 from homeassistant.util.unit_conversion import EnergyConverter, VolumeConverter
 
@@ -56,9 +52,8 @@ class StatisticImport(abc.ABC):
     def get_value(self, data: ConsumptionCost) -> float | None:
         pass
 
-    @property
-    def statistic_id(self):
-        return f"{DOMAIN}:{self.unique_id}"
+    def statistic_id(self, profile: ProfileId):
+        return f"{DOMAIN}:a{profile.agreement_id}_{self.unique_id}"
 
 
 class ConsumptionImport(StatisticImport):
@@ -187,9 +182,12 @@ class LastStat:
 
 
 class GreenchoiceImporter:
-    def __init__(self, hass: HomeAssistant, api: GreenchoiceApi, profile: ProfileId):
+    def __init__(
+        self, hass: HomeAssistant, api: GreenchoiceApi, name: str, profile: ProfileId
+    ):
         self._api = api
         self._hass = hass
+        self._name = name
         self._profile = profile
 
     def import_stat_values(
@@ -201,9 +199,9 @@ class GreenchoiceImporter:
         metadata = StatisticMetaData(
             mean_type=StatisticMeanType.NONE,
             has_sum=True,
-            name=f"Greenchoice {stat.name}",
+            name=f"{self._name} {stat.name}",
             source=DOMAIN,
-            statistic_id=stat.statistic_id,
+            statistic_id=stat.statistic_id(self._profile),
             unit_class=stat.unit_class,
             unit_of_measurement=stat.unit,
         )
@@ -233,16 +231,17 @@ class GreenchoiceImporter:
         statistics: dict[StatisticImport, LastStat] = {}
         oldest_stat: datetime | None = None
         for stat in STATS:
+            stat_id = stat.statistic_id(self._profile)
             last_stats = (
                 await get_instance(self._hass).async_add_executor_job(
                     get_last_statistics,
                     self._hass,
                     1,
-                    stat.statistic_id,
+                    stat_id,
                     True,
                     {"sum"},
                 )
-            ).get(stat.statistic_id, [])
+            ).get(stat_id, [])
             last_stat = last_stats[0] if last_stats else None
 
             if not last_stat or "start" not in last_stat or "sum" not in last_stat:
@@ -286,5 +285,5 @@ class GreenchoiceImporter:
             )
 
     async def clear_data(self):
-        ids = [stat.statistic_id for stat in STATS]
+        ids = [stat.statistic_id(self._profile) for stat in STATS]
         get_instance(self._hass).async_clear_statistics(list(ids))

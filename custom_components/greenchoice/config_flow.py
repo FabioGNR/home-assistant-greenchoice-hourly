@@ -63,6 +63,10 @@ class GreenchoiceConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    @staticmethod
+    def _get_label_for_profile(profile: Profile) -> str:
+        return f"{profile.street} {profile.house_number}"
+
     async def async_step_profile(
         self,
         user_input: dict[str, Any] | None = None,
@@ -70,26 +74,24 @@ class GreenchoiceConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None and self._profiles:
-            profile = user_input.get("profile", None)
-            if profile:
-                customer_number = next(
-                    (p for p in self._profiles if p.agreement_id == profile),
-                ).customer_number
+            agreement = user_input.get("profile", None)
+            if agreement:
+                agreement_id = int(agreement)
+                profile = next(
+                    (p for p in self._profiles if p.agreement_id == agreement_id),
+                )
                 return await self._create_config_entry(
                     username=self._username,
                     password=self._password,
-                    customer_number=customer_number,
-                    agreement_id=profile,
+                    customer_number=profile.customer_number,
+                    agreement_id=agreement,
+                    name=self._get_label_for_profile(profile),
                 )
         if self._profiles is None:
             return self.async_abort(reason="No profiles available")
         eligible_profiles = [
             p for p in self._profiles if p.energy_supply_status == "Active"
         ]
-        if len(eligible_profiles) == 1:
-            return await self.async_step_profile(
-                {**(user_input or {}), "profile": eligible_profiles[0].agreement_id}
-            )
 
         return self.async_show_form(
             step_id="profile",
@@ -100,8 +102,8 @@ class GreenchoiceConfigFlow(ConfigFlow, domain=DOMAIN):
                             "select": {
                                 "options": [
                                     {
-                                        "label": f"{p.street} {p.house_number}",
-                                        "value": p.agreement_id,
+                                        "label": self._get_label_for_profile(p),
+                                        "value": str(p.agreement_id),
                                     }
                                     for p in eligible_profiles
                                 ]
@@ -119,10 +121,11 @@ class GreenchoiceConfigFlow(ConfigFlow, domain=DOMAIN):
         password: str,
         customer_number: int,
         agreement_id: int,
+        name: str,
     ) -> ConfigFlowResult:
         """Store username and password."""
         return self.async_create_entry(
-            title="Greenchoice",
+            title=name,
             data={
                 CONF_USERNAME: username,
                 CONF_PASSWORD: password,

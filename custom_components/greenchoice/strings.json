@@ -7,6 +7,9 @@
           "username": "[%key:common::config_flow::data::username%]",
           "password": "[%key:common::config_flow::data::password%]"
         }
+      },
+      "profile": {
+        "description": "Select the Greenchoice agreement to use"
       }
     },
     "error": {
