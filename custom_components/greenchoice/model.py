@@ -1,7 +1,14 @@
 from datetime import datetime
+from typing import Annotated
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AfterValidator, BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
+
+# Greenchoice datetimes have no timezone, so we assume the times are in timezone of the Netherlands
+AwareDateTime = Annotated[
+    datetime, AfterValidator(lambda dt: dt.replace(tzinfo=ZoneInfo("Europe/Amsterdam")))
+]
 
 
 class CamelCaseModel(BaseModel):
@@ -38,7 +45,7 @@ class GasConsumptionData(CamelCaseModel):
 
 
 class ConsumptionCost(CamelCaseModel):
-    consumed_on: datetime
+    consumed_on: AwareDateTime
     electricity: ElectricityConsumptionData | None
     gas: GasConsumptionData | None
     has_consumption: bool
@@ -46,7 +53,7 @@ class ConsumptionCost(CamelCaseModel):
 
 class Consumption(CamelCaseModel):
     interval: str
-    start: datetime
-    end: datetime
+    start: AwareDateTime
+    end: AwareDateTime
     consumption_costs: list[ConsumptionCost]
     has_consumption: bool
